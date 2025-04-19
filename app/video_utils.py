@@ -1,41 +1,59 @@
 import cv2
-import os
 from deepface import DeepFace
-from .face_utils import crop_face_mtcnn
+from collections import defaultdict
 import numpy as np
 
-def analyze_video_emotions(video_path: str, frame_rate: int = 1):
+def extract_frames(video_path, interval=1):
     cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        return []
+
     fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_interval = int(fps * frame_rate)
+    
+    frame_interval = int(fps * interval)
 
+    frames = []
     frame_count = 0
-    results = []
+    second = 0
 
-    while cap.isOpened():
+    while True:
         ret, frame = cap.read()
         if not ret:
             break
 
         if frame_count % frame_interval == 0:
-            try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-                #convertir el frame a una imagen temporal para analisis
-                temp_frame_path = f"temp_frame_{frame_count}.jpg"
-                cv2.imwrite(temp_frame_path, frame)
+            if len(faces) > 0:
+                frames.append((second, frame))
+                print(f"✅ Rostro detectado en segundo {second}")
+            else:
+                print(f"🚫 Sin rostro en segundo {second}, se omite.")
 
-                cropped_path = crop_face_mtcnn(temp_frame_path)
-                if cropped_path:
-                    analysis = DeepFace.analyze(
-                        img_path=cropped_path, actions=['emotion'], enforce_detection=True
-                    )
-                    results.append(analysis[0])
-                    os.remove(cropped_path)
-                os.remove(temp_frame_path)
-            except Exception as e:
-                results.append({"error": str(e), "frame": frame_count})
+            second += interval
 
         frame_count += 1
 
     cap.release()
-    return results
+    return frames
+
+def analyze_emotions(frames):
+    emotion_summary = defaultdict(int)
+    timeline = {}
+
+    for second, frame in frames:
+        try:
+            result = DeepFace.analyze(frame, actions=["emotion"], enforce_detection=True)
+            dominant = result[0]["dominant_emotion"]
+            timeline[second] = dominant
+            emotion_summary[dominant] += 1
+        except Exception as e:
+            continue
+
+    return {
+        "timeline": timeline,
+        "emotion_summary": dict(emotion_summary)
+    }
