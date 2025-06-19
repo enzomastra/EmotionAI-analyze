@@ -16,7 +16,7 @@ def analyze_emotion_on_frame(frame):
     if face is None:
         return None
     try:
-        analysis = DeepFace.analyze(face, actions=["emotion"], enforce_detection=False)
+        analysis = DeepFace.analyze(face, actions=["emotion"], enforce_detection=False) #model_name="Facenet"
         if isinstance(analysis, list):
             analysis = analysis[0]
         return analysis["dominant_emotion"]
